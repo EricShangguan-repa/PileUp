@@ -60,20 +60,31 @@ def backtest_series(
 
 
 def summarize(results: pd.DataFrame) -> pd.DataFrame:
-    """Pooled WAPE and MAE per model across all products and folds."""
-    return (
-        results.groupby("model")
-        .apply(
-            lambda g: pd.Series(
-                {
-                    "wape": wape(g["actual"].to_numpy(), g["predicted"].to_numpy()),
-                    "mae": mae(g["actual"].to_numpy(), g["predicted"].to_numpy()),
-                }
-            ),
-            include_groups=False,
-        )
-        .sort_values("wape")
+    """Per model, pooled across all products and folds:
+    - wape, mae: daily errors
+    - wape_28d_total: error on each product's total demand over the whole horizon,
+      which is what a stockout decision depends on
+    """
+    totals = (
+        results.groupby(["model", "product_id", "cutoff"])[["actual", "predicted"]]
+        .sum()
+        .reset_index()
     )
+    total_wape = totals.groupby("model").apply(
+        lambda g: wape(g["actual"].to_numpy(), g["predicted"].to_numpy()),
+        include_groups=False,
+    )
+    daily = results.groupby("model").apply(
+        lambda g: pd.Series(
+            {
+                "wape": wape(g["actual"].to_numpy(), g["predicted"].to_numpy()),
+                "mae": mae(g["actual"].to_numpy(), g["predicted"].to_numpy()),
+            }
+        ),
+        include_groups=False,
+    )
+    daily["wape_28d_total"] = total_wape
+    return daily.sort_values("wape")
 
 
 def load_daily_sales() -> pd.DataFrame:
@@ -118,17 +129,33 @@ def write_report(summary: pd.DataFrame, meta: dict) -> None:
         f"| Evaluated days | {meta['first_eval_day']} to {meta['last_eval_day']} |",
         f"| Forecast points per model | {meta['n_points']:,} |",
         "",
-        "| Model | WAPE | MAE (units/day) |",
-        "|---|---|---|",
+        "| Model | Daily WAPE | Daily MAE (units/day) | 28-day total WAPE |",
+        "|---|---|---|---|",
     ]
     for model_name, row in summary.iterrows():
-        lines.append(f"| {model_name} | {row['wape']:.1%} | {row['mae']:.2f} |")
+        lines.append(
+            f"| {model_name} | {row['wape']:.1%} | {row['mae']:.2f} "
+            f"| {row['wape_28d_total']:.1%} |"
+        )
     lines += [
         "",
         "Notes:",
         (
             "- WAPE = sum of |error| / sum of actual units, pooled over all products and folds. "
             "MAPE isn't used because most product-days have zero sales."
+        ),
+        (
+            "- Daily WAPE scores each day separately. A daily WAPE near 100% is no better "
+            "than forecasting zero, because single-product daily sales here are very spiky."
+        ),
+        (
+            "- 28-day total WAPE scores each product's total demand over each 28-day window. "
+            "That total is what the days-to-stockout estimate uses. The best model is still "
+            "chosen by daily WAPE."
+        ),
+        (
+            "- Seasonal naive and the 7-day moving average have identical 28-day totals by "
+            "construction: both add up to four times last week's sales."
         ),
         "- Ranking products by revenue before the first cutoff keeps future sales out of product selection.",
         f"- {meta['dropped_day']} is excluded: the data ends mid-day, so it's a partial day.",

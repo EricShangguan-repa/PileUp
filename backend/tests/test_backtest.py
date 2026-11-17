@@ -1,8 +1,9 @@
 from datetime import date, timedelta
 
 import pandas as pd
+import pytest
 
-from forecast.backtest import backtest_series, full_series, make_cutoffs
+from forecast.backtest import backtest_series, full_series, make_cutoffs, summarize
 
 
 def test_make_cutoffs_leaves_room_for_full_horizon():
@@ -21,6 +22,23 @@ def test_backtest_never_trains_on_future_days():
     assert (naive["predicted"] == 1.0).all()
     assert (naive["actual"] == 100.0).all()
     assert naive["horizon_date"].min() == date(2024, 1, 11)
+
+
+def test_summarize_total_wape_lets_daily_errors_cancel_within_a_window():
+    # one product, one fold: daily misses cancel out, the 2-day total is exact
+    results = pd.DataFrame(
+        {
+            "model": ["m", "m"],
+            "product_id": [1, 1],
+            "cutoff": [date(2024, 1, 1)] * 2,
+            "horizon_date": [date(2024, 1, 2), date(2024, 1, 3)],
+            "actual": [10.0, 0.0],
+            "predicted": [0.0, 10.0],
+        }
+    )
+    row = summarize(results).loc["m"]
+    assert row["wape"] == pytest.approx(2.0)
+    assert row["wape_28d_total"] == pytest.approx(0.0)
 
 
 def test_full_series_zero_fills_after_last_sale():
