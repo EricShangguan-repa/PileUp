@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+sqlalchemy
+pymysql
+cryptography
+httpx
+python-dotenv
+openpyxl
+pytest
+ruff

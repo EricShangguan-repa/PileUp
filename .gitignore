@@ -1,0 +1,11 @@
+data/raw/
+Shopify_Handoff/
+CLAUDE.private.md
+.env
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+frontend/.next/
+*.xlsx
