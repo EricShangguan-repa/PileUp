@@ -71,7 +71,7 @@ Shopify dev store ───────┘   (one     ──> forecast + backtes
   ```
 
 ### Commands
-*Setup, database, pipeline and backtest commands are real; sync_shopify, API and frontend are still planned. Keep this accurate.*
+*Everything is real except sync_shopify and the frontend, which are still planned. Keep this accurate.*
 
 ```bash
 # Backend setup
@@ -91,12 +91,13 @@ python -m pipeline.load_online_retail   # clean + load real history (~80s)
 python -m pipeline.aggregate_daily_sales  # order_lines -> daily_sales, zero-filled (~55s)
 python -m pipeline.sync_shopify         # pull dev-store products/orders (needs .env)
 python -m forecast.backtest             # rolling-origin backtest -> docs/backtest_results.md + .json, best model's forecasts -> forecasts table (~15s)
+python -m pipeline.simulate_inventory   # SIMULATED stock for forecast products (run after backtest)
 
 # API
 uvicorn app.main:app --reload           # http://localhost:8000/docs
 
 # Tests and lint
-pytest                                  # full suite
+pytest                                  # full suite (test_api.py needs MySQL running + pipeline already run)
 pytest tests/test_transform.py -q       # single file
 ruff check . && ruff format .
 
