@@ -81,7 +81,8 @@ source .venv/Scripts/activate        # Git Bash on Windows (PowerShell: .venv\Sc
 pip install -r requirements.txt
 
 # Database
-mysql -u root -p < schema.sql        # create tables
+mysql -u root -p -e "CREATE DATABASE shopify_insights"
+mysql -u root -p shopify_insights < schema.sql   # create tables (schema.sql doesn't create the database)
 
 # MySQL 8 must be running locally; credentials come from DATABASE_URL in .env
 
