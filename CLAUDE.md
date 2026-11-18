@@ -88,11 +88,14 @@ mysql -u root -p < schema.sql        # create tables
 # Data pipeline (xlsx must be at data/raw/online_retail_II.xlsx, from
 # https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip; ucimlrepo can't import this dataset)
 python -m pipeline.load_online_retail   # clean + load real history (~80s)
-python -m pipeline.seed_shopify        # ONE-TIME: 30 backdated test orders in the dev store (~7 min, resumable)
-python -m pipeline.sync_shopify         # dev store -> MySQL: variants, real stock, orders (incremental)
+python -m pipeline.seed_shopify_demand # ONE-TIME: 326 synthetic test orders shaped on real UK demand + test stock (~70 min, resumable)
+                                        # (replaces the earlier random seed_shopify orders, which it deletes)
+python -m pipeline.sync_shopify         # dev store -> MySQL: variants, store stock, orders (incremental)
+python -m pipeline.sync_shopify --full  # wipe synced Shopify rows (not products) and resync; needed after deleting orders
 python -m pipeline.aggregate_daily_sales  # order_lines -> daily_sales for both sources (~65s); rerun after a sync
 python -m forecast.backtest             # rolling-origin backtest -> docs/backtest_results.md + .json, best model's forecasts -> forecasts table (~15s)
 python -m pipeline.simulate_inventory   # SIMULATED stock for forecast products (run after backtest)
+python -m forecast.forecast_shopify     # 28-day Shopify forecasts with the backtest's best model (after aggregate)
 
 # API
 uvicorn app.main:app --reload           # http://localhost:8000/docs
@@ -147,10 +150,13 @@ cd frontend && npm install && npm run dev   # http://localhost:3000
   - The Admin GraphQL API is rate limited by query cost. Respect the throttle info in the response and back off when throttled.
   - Paginate with cursors (`pageInfo.hasNextPage`, `endCursor`).
   - Make the sync incremental: fetch only orders updated since the last sync timestamp (stored in `sync_state`).
+  - The sync doesn't detect deletions (deleted orders never match the updated_at query). After deleting orders in the store, run `sync_shopify --full`.
+  - Without the `read_all_orders` permission, Shopify only returns orders from the last 60 days. The demand seed is backdated to 2026-09-21, so a full resync after about 2026-11-20 may miss the oldest orders (unverified whether the cutoff uses processedAt or creation time); incremental syncs keep what's already in MySQL.
   - Auth: the app lives in Shopify's Dev Dashboard. There is no permanent `shpat_` token; `shopify_client.py` gets a 24h token with the client credentials grant (client ID + secret).
   - Reading orders needs the app set to **custom distribution**; before that, Shopify blocks the Order object as protected customer data.
   - Each Shopify **variant** is one PileUp product (variants are what Shopify sells and stocks, like StockCodes).
-  - Shopify stock is real (`is_simulated = FALSE`); Online Retail stock is simulated.
+  - Shopify stock comes from the store (`is_simulated = FALSE`), but it is **test-store stock set by `seed_shopify_demand`** (5-40 days of demand), not a real merchant's inventory. Online Retail stock is simulated.
+  - Shopify orders are **synthetic test orders**: 56 days of real UK demand (2011-09-12 to 2011-11-06, top 15 products, scaled to 0.5-2 units/day) replayed onto 2026-09-21 to 2026-11-15. Never report forecast accuracy on Shopify data; accuracy numbers come only from the UK backtest.
   - Revenue is in different currencies per source (GBP vs the store's currency), so never sum across sources.
 - **Secrets:** `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_API_URL` go in `.env` (git-ignored). Commit a `.env.example` with placeholders only. Never print or commit tokens.
 - **Don't commit:** `data/raw/`, `.env`, `.venv/`, `node_modules/`, or the 43 MB xlsx.
