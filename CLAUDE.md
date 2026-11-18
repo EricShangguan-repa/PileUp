@@ -71,7 +71,7 @@ Shopify dev store ───────┘   (one     ──> forecast + backtes
   ```
 
 ### Commands
-*Everything is real except the frontend, which is still planned. Keep this accurate.*
+*All of these are real. Keep this accurate.*
 
 ```bash
 # Backend setup
@@ -105,8 +105,12 @@ pytest                                  # full suite (test_api.py needs MySQL ru
 pytest tests/test_transform.py -q       # single file
 ruff check . && ruff format .
 
-# Frontend
-cd frontend && npm install && npm run dev   # http://localhost:3000
+# Frontend (needs the API running; fetches happen server-side, so no CORS setup)
+cd frontend
+npm install
+cp .env.local.example .env.local         # NEXT_PUBLIC_API_URL, defaults to http://localhost:8000
+npm run dev                              # http://localhost:3000
+npm run lint && npm run build            # checks before committing frontend changes
 ```
 
 ### Conventions
@@ -158,6 +162,7 @@ cd frontend && npm install && npm run dev   # http://localhost:3000
   - Shopify stock comes from the store (`is_simulated = FALSE`), but it is **test-store stock set by `seed_shopify_demand`** (5-40 days of demand), not a real merchant's inventory. Online Retail stock is simulated.
   - Shopify orders are **synthetic test orders**: 56 days of real UK demand (2011-09-12 to 2011-11-06, top 15 products, scaled to 0.5-2 units/day) replayed onto 2026-09-21 to 2026-11-15. Never report forecast accuracy on Shopify data; accuracy numbers come only from the UK backtest.
   - Revenue is in different currencies per source (GBP vs the store's currency), so never sum across sources.
+- **Frontend:** Recharts 2 needs `react-is` overridden to the React 19 version (`overrides` in `frontend/package.json`); keep them in step when upgrading React. Chart components must be client components (`"use client"`).
 - **Secrets:** `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_API_URL` go in `.env` (git-ignored). Commit a `.env.example` with placeholders only. Never print or commit tokens.
 - **Don't commit:** `data/raw/`, `.env`, `.venv/`, `node_modules/`, or the 43 MB xlsx.
 - **Windows:** use the Git Bash or PowerShell syntax noted in Commands.
