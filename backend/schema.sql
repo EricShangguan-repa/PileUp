@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS daily_sales (
     UNIQUE KEY uq_daily_sales_product_date (product_id, sale_date)
 );
 
+CREATE TABLE IF NOT EXISTS sync_state (
+    source VARCHAR(20) PRIMARY KEY,
+    last_synced_at DATETIME NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS forecasts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,

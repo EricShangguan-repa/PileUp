@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from app.db import engine
 
-SOURCE = "online_retail"
+SOURCES = ["online_retail", "shopify"]
 
 
 def compute_daily_sales(df: pd.DataFrame) -> pd.DataFrame:
@@ -45,21 +45,24 @@ def compute_daily_sales(df: pd.DataFrame) -> pd.DataFrame:
     ]
 
 
-def main() -> None:
+def aggregate_source(source: str) -> None:
     t0 = time.time()
     with engine.begin() as conn:
         rows = conn.execute(
             text(
                 "SELECT ol.product_id, o.order_date, ol.quantity, ol.unit_price "
                 "FROM order_lines ol JOIN orders o ON ol.order_id = o.id "
-                "WHERE ol.source = :source"
+                "WHERE ol.source = :source AND NOT o.is_cancelled"
             ),
-            {"source": SOURCE},
+            {"source": source},
         ).all()
     df = pd.DataFrame(
         rows, columns=["product_id", "order_date", "quantity", "unit_price"]
     )
-    print(f"loaded {len(df):,} order lines in {time.time() - t0:.1f}s")
+    print(f"{source}: loaded {len(df):,} order lines in {time.time() - t0:.1f}s")
+    if df.empty:
+        print(f"{source}: no orders yet, skipping")
+        return
 
     daily = compute_daily_sales(df)
     print(
@@ -69,7 +72,7 @@ def main() -> None:
     records = [
         {
             "product_id": int(r.product_id),
-            "source": SOURCE,
+            "source": source,
             "sale_date": r.sale_date,
             "quantity_sold": int(r.quantity_sold),
             "revenue": float(r.revenue),
@@ -78,7 +81,7 @@ def main() -> None:
     ]
     with engine.begin() as conn:
         conn.execute(
-            text("DELETE FROM daily_sales WHERE source = :source"), {"source": SOURCE}
+            text("DELETE FROM daily_sales WHERE source = :source"), {"source": source}
         )
         conn.execute(
             text(
@@ -88,8 +91,13 @@ def main() -> None:
             records,
         )
     print(
-        f"inserted {len(records):,} daily sales rows in {time.time() - t0:.1f}s total"
+        f"{source}: inserted {len(records):,} daily sales rows in {time.time() - t0:.1f}s"
     )
+
+
+def main() -> None:
+    for source in SOURCES:
+        aggregate_source(source)
 
 
 if __name__ == "__main__":

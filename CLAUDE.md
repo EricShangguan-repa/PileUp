@@ -71,7 +71,7 @@ Shopify dev store ───────┘   (one     ──> forecast + backtes
   ```
 
 ### Commands
-*Everything is real except sync_shopify and the frontend, which are still planned. Keep this accurate.*
+*Everything is real except the frontend, which is still planned. Keep this accurate.*
 
 ```bash
 # Backend setup
@@ -88,8 +88,9 @@ mysql -u root -p < schema.sql        # create tables
 # Data pipeline (xlsx must be at data/raw/online_retail_II.xlsx, from
 # https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip; ucimlrepo can't import this dataset)
 python -m pipeline.load_online_retail   # clean + load real history (~80s)
-python -m pipeline.aggregate_daily_sales  # order_lines -> daily_sales, zero-filled (~55s)
-python -m pipeline.sync_shopify         # pull dev-store products/orders (needs .env)
+python -m pipeline.seed_shopify        # ONE-TIME: 30 backdated test orders in the dev store (~7 min, resumable)
+python -m pipeline.sync_shopify         # dev store -> MySQL: variants, real stock, orders (incremental)
+python -m pipeline.aggregate_daily_sales  # order_lines -> daily_sales for both sources (~65s); rerun after a sync
 python -m forecast.backtest             # rolling-origin backtest -> docs/backtest_results.md + .json, best model's forecasts -> forecasts table (~15s)
 python -m pipeline.simulate_inventory   # SIMULATED stock for forecast products (run after backtest)
 
@@ -145,8 +146,13 @@ cd frontend && npm install && npm run dev   # http://localhost:3000
   - So seed the dev store with a *small* sample (≈20 products, a few dozen orders). Never try to replay the full dataset into Shopify.
   - The Admin GraphQL API is rate limited by query cost. Respect the throttle info in the response and back off when throttled.
   - Paginate with cursors (`pageInfo.hasNextPage`, `endCursor`).
-  - Make the sync incremental: fetch only orders updated since the last sync timestamp.
-- **Secrets:** `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`, `DATABASE_URL`, `NEXT_PUBLIC_API_URL` go in `.env` (git-ignored). Commit a `.env.example` with placeholders only. Never print or commit tokens.
+  - Make the sync incremental: fetch only orders updated since the last sync timestamp (stored in `sync_state`).
+  - Auth: the app lives in Shopify's Dev Dashboard. There is no permanent `shpat_` token; `shopify_client.py` gets a 24h token with the client credentials grant (client ID + secret).
+  - Reading orders needs the app set to **custom distribution**; before that, Shopify blocks the Order object as protected customer data.
+  - Each Shopify **variant** is one PileUp product (variants are what Shopify sells and stocks, like StockCodes).
+  - Shopify stock is real (`is_simulated = FALSE`); Online Retail stock is simulated.
+  - Revenue is in different currencies per source (GBP vs the store's currency), so never sum across sources.
+- **Secrets:** `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_API_URL` go in `.env` (git-ignored). Commit a `.env.example` with placeholders only. Never print or commit tokens.
 - **Don't commit:** `data/raw/`, `.env`, `.venv/`, `node_modules/`, or the 43 MB xlsx.
 - **Windows:** use the Git Bash or PowerShell syntax noted in Commands.
 - **Honesty rules:**

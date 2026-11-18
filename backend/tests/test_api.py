@@ -47,6 +47,13 @@ def test_sales_summary():
     )
 
 
+def test_sales_summary_per_source():
+    response = client.get("/sales/summary", params={"source": "shopify"})
+    assert response.status_code == 200
+    assert response.json()["source"] == "shopify"
+    assert client.get("/sales/summary", params={"source": "amazon"}).status_code == 422
+
+
 def test_forecast_for_known_product():
     response = client.get(f"/forecast/{_forecast_product_id()}")
     assert response.status_code == 200
