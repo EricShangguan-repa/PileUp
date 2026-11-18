@@ -7,6 +7,17 @@ It runs on two data sources that share one schema:
 - **Online Retail II**: two years of real transactions from a UK online gift retailer. This is where the forecasting models are tested and scored.
 - **A Shopify development store**: synced live through the GraphQL Admin API. This proves the integration works end to end: pagination, rate limits and incremental syncs.
 
+![Overview of the UK data: products at risk of stocking out, weekly revenue and backtest accuracy](docs/screenshots/overview.png)
+
+<details>
+<summary>More screenshots: the Shopify store view and a product forecast</summary>
+
+![Shopify dev store view with three snowboards at risk](docs/screenshots/shopify.png)
+
+![Product page with recent sales, the 28-day forecast and the latest backtest fold](docs/screenshots/product.png)
+
+</details>
+
 ## Why
 
 Running out of a popular product loses sales, and over-ordering ties up cash. A merchant really needs one answer: "what do I need to reorder this week?" I wanted to build that end to end on real data, from raw orders to a forecast someone could act on. I also wanted the accuracy measured honestly rather than assumed.
