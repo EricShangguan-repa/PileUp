@@ -1,9 +1,12 @@
 """Sync products, stock levels and orders from the Shopify dev store into MySQL.
 
 Products and stock are re-read in full each run (the store is small). Orders are
-incremental: only orders updated since the last sync are fetched.
+incremental: only orders updated since the last sync are fetched. Deleted orders
+are never reported by that query, so after deleting orders in the store run with
+--full, which wipes this source's synced rows (keeping products) and resyncs.
 """
 
+import sys
 from datetime import UTC, datetime
 
 from sqlalchemy import bindparam, text
@@ -218,9 +221,25 @@ def save_orders(conn, orders: list[dict], product_map: dict[str, int]) -> int:
     return len(lines)
 
 
+def wipe_synced_rows(conn) -> None:
+    params = {"source": SOURCE}
+    conn.execute(text("DELETE FROM order_lines WHERE source = :source"), params)
+    for table in (
+        "orders",
+        "daily_sales",
+        "inventory_snapshots",
+        "forecasts",
+        "sync_state",
+    ):
+        conn.execute(text(f"DELETE FROM {table} WHERE source = :source"), params)
+
+
 def main() -> None:
     client = ShopifyClient()
     with engine.begin() as conn:
+        if "--full" in sys.argv:
+            wipe_synced_rows(conn)
+            print("wiped synced Shopify rows for a full resync")
         last_synced_at = conn.execute(
             text("SELECT last_synced_at FROM sync_state WHERE source = :source"),
             {"source": SOURCE},

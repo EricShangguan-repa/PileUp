@@ -24,9 +24,20 @@ def test_at_risk_products_are_below_threshold_and_marked_simulated():
     assert body["products"], "expected some at-risk products with the simulated stock"
     for p in body["products"]:
         assert p["days_to_stockout"] < 14
-        assert p["stock_is_simulated"] is True
+        # only the Online Retail stock is simulated; Shopify stock comes from the store
+        assert p["stock_is_simulated"] is (p["source"] == "online_retail")
     days = [p["days_to_stockout"] for p in body["products"]]
     assert days == sorted(days)
+
+
+def test_at_risk_filters_by_source():
+    for source in ("online_retail", "shopify"):
+        response = client.get("/products/at-risk", params={"source": source})
+        assert response.status_code == 200
+        assert all(p["source"] == source for p in response.json()["products"])
+    assert (
+        client.get("/products/at-risk", params={"source": "amazon"}).status_code == 422
+    )
 
 
 def test_at_risk_rejects_invalid_threshold():
